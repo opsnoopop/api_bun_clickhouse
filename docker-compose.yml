@@ -1,0 +1,53 @@
+services:
+  api:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    image: oven/bun:1_alpine_custom
+    container_name: container_bun
+    restart: always
+    ports:
+      - "80:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      network_optest:
+        ipv4_address: 172.16.0.11
+
+  database:
+    image: clickhouse:25.8
+    container_name: container_clickhouse
+    restart: always
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "9000:9000"   # Native TCP interface
+    volumes:
+      - ./clickhouse:/var/lib/clickhouse
+      - ./clickhouse_initdb:/docker-entrypoint-initdb.d
+    environment:
+      CLICKHOUSE_DB: testdb
+      CLICKHOUSE_USER: testuser
+      CLICKHOUSE_PASSWORD: testpass
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user=testuser", "--password=testpass", "--query=SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks:
+      network_optest:
+        ipv4_address: 172.16.0.12
+
+networks:
+  network_optest:
+    name: global_optest
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.0.0/24
